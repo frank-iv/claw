@@ -1,0 +1,25 @@
+[project]
+name = "agent-bridge"
+version = "0.1.0"
+description = "Bridge between openclaw-gateway and Claude Agent SDK"
+requires-python = ">=3.11"
+dependencies = [
+    "claude-agent-sdk>=0.1.0",
+    "websockets>=14.0",
+    "aiofiles>=24.1.0",
+]
+
+[project.scripts]
+agent-bridge = "bridge:main"
+
+[tool.mypy]
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TCH"]
