@@ -8,7 +8,17 @@ from pathlib import Path
 class ExecutionMode(enum.Enum):
     SDK = "sdk"
     CLI = "cli"
+    EC2 = "ec2"
     AUTO = "auto"
+
+
+@dataclass(frozen=True)
+class EC2Config:
+    repo_url: str
+    branch: str
+    stages: list[str]
+    instance_type: str = "c5.xlarge"
+    region: str = "us-east-1"
 
 
 @dataclass(frozen=True)
@@ -19,6 +29,7 @@ class AgentDefinition:
     mode_preference: ExecutionMode
     sdk_tools: list[str] = field(default_factory=list)
     hooks: dict[str, list[str]] = field(default_factory=dict)
+    ec2_config: EC2Config | None = None
 
 
 ANTI_SLOP_PREAMBLE = (
@@ -120,5 +131,11 @@ def build_registry(agents_dir: Path) -> dict[str, AgentDefinition]:
             system_prompt=_load_prompt(agents_dir, "pm.md"),
             mode_preference=ExecutionMode.CLI,
             sdk_tools=_write_tools(),
+        ),
+        "ec2-review": AgentDefinition(
+            name="ec2-review",
+            description="EC2 spot instance code review: tests, lint, security via Docker containers",
+            system_prompt="EC2-based review agent. Stages run in Docker on spot instances.",
+            mode_preference=ExecutionMode.EC2,
         ),
     }

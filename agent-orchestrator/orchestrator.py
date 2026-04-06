@@ -7,8 +7,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Union
 
-from agents import AgentDefinition, ExecutionMode, build_registry
+from agents import AgentDefinition, EC2Config, ExecutionMode, build_registry
 from cli_runner import CLIProcess, CLIRunResult, run_cli_agent, start_cli_process
+from ec2_runner import EC2RunResult, run_ec2_review
 from sdk_runner import SDKRunResult, run_sdk_agent
 
 
@@ -26,17 +27,17 @@ class TaskHandle:
     agent_name: str
     execution_mode: ExecutionMode
     status: TaskStatus = TaskStatus.PENDING
-    async_task: asyncio.Task[Union[SDKRunResult, CLIRunResult]] | None = None
+    async_task: asyncio.Task[Union[SDKRunResult, CLIRunResult, EC2RunResult]] | None = None
     cli_process: CLIProcess | None = None
-    result: SDKRunResult | CLIRunResult | None = None
+    result: SDKRunResult | CLIRunResult | EC2RunResult | None = None
 
     @property
     def is_active(self) -> bool:
         return self.status in (TaskStatus.PENDING, TaskStatus.RUNNING)
 
 
-ANALYSIS_AGENTS = frozenset({"research", "security", "code-review"})
-WRITE_AGENTS = frozenset({"linting", "testing", "infrastructure"})
+ANALYSIS_AGENTS = frozenset({"research"})
+WRITE_AGENTS = frozenset({"code-review", "security", "linting", "testing", "infrastructure", "pm"})
 
 
 def resolve_execution_mode(agent: AgentDefinition) -> ExecutionMode:
@@ -73,6 +74,7 @@ class Orchestrator:
         force_mode: ExecutionMode | None = None,
         max_turns: int = 50,
         max_budget_usd: float | None = None,
+        ec2_config: EC2Config | None = None,
     ) -> TaskHandle:
         agent = self._select_agent(task_description, agent_name)
         mode = force_mode if force_mode is not None else resolve_execution_mode(agent)
@@ -85,7 +87,21 @@ class Orchestrator:
             execution_mode=mode,
         )
 
-        if mode == ExecutionMode.SDK:
+        coro: asyncio.Coroutine[None, None, SDKRunResult | CLIRunResult | EC2RunResult]
+
+        if mode == ExecutionMode.EC2:
+            config = ec2_config or agent.ec2_config
+            if config is None:
+                raise ValueError(f"EC2 mode requires ec2_config for agent {agent.name}")
+            coro = run_ec2_review(
+                agent,
+                repo_url=config.repo_url,
+                branch=config.branch,
+                stages=config.stages,
+                instance_type=config.instance_type,
+                region=config.region,
+            )
+        elif mode == ExecutionMode.SDK:
             coro = run_sdk_agent(
                 agent,
                 task_description,
@@ -131,7 +147,7 @@ class Orchestrator:
             handles.append(handle)
         return handles
 
-    async def wait_for(self, task_id: str) -> SDKRunResult | CLIRunResult:
+    async def wait_for(self, task_id: str) -> SDKRunResult | CLIRunResult | EC2RunResult:
         handle = self._get_handle(task_id)
         if handle.async_task is None:
             raise RuntimeError(f"Task {task_id} has no running coroutine")
@@ -139,9 +155,9 @@ class Orchestrator:
         assert handle.result is not None
         return handle.result
 
-    async def wait_all(self, task_ids: list[str] | None = None) -> list[SDKRunResult | CLIRunResult]:
+    async def wait_all(self, task_ids: list[str] | None = None) -> list[SDKRunResult | CLIRunResult | EC2RunResult]:
         ids = task_ids or list(self._tasks.keys())
-        results: list[SDKRunResult | CLIRunResult] = []
+        results: list[SDKRunResult | CLIRunResult | EC2RunResult] = []
         for tid in ids:
             try:
                 results.append(await self.wait_for(tid))
@@ -209,6 +225,8 @@ class Orchestrator:
             "testing": ["test", "pytest", "coverage", "spec", "unit test", "integration test"],
             "linting": ["lint", "format", "clean", "unused", "dead code", "style"],
             "infrastructure": ["deploy", "infra", "lambda", "ecr", "iam", "aws", "docker"],
+            "pm": ["design", "architect", "plan", "breakdown", "github actions", "ci/cd", "workflow", "project", "spec", "rfc", "proposal"],
+            "ec2-review": ["ec2 review", "spot review", "remote review"],
         }
         for agent_name, keywords in keyword_map.items():
             if any(kw in lower for kw in keywords):
