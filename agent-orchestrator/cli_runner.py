@@ -3,10 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import signal
-import tempfile
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import AsyncIterator
 
 from agents import AgentDefinition
@@ -61,8 +59,6 @@ def _build_cli_command(
     *,
     max_turns: int = 50,
 ) -> tuple[list[str], str]:
-    prompt_dir = Path(tempfile.mkdtemp(prefix="agent-ctx-"))
-    (prompt_dir / "CLAUDE.md").write_text(agent.system_prompt)
     cmd = [
         "claude",
         "-p", task,
@@ -70,9 +66,9 @@ def _build_cli_command(
         "--output-format", "stream-json",
         "--max-turns", str(max_turns),
         "--permission-mode", "bypassPermissions",
-        "--add-dir", str(prompt_dir),
+        "--system-prompt", agent.system_prompt,
     ]
-    return cmd, working_dir, prompt_dir
+    return cmd, working_dir
 
 
 async def start_cli_process(
@@ -81,15 +77,15 @@ async def start_cli_process(
     working_dir: str,
     *,
     max_turns: int = 50,
-) -> tuple[CLIProcess, Path]:
-    cmd, cwd, prompt_file = _build_cli_command(agent, task, working_dir, max_turns=max_turns)
+) -> CLIProcess:
+    cmd, cwd = _build_cli_command(agent, task, working_dir, max_turns=max_turns)
     process = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=cwd,
     )
-    return CLIProcess(agent_name=agent.name, process=process), prompt_file
+    return CLIProcess(agent_name=agent.name, process=process)
 
 
 async def run_cli_agent(
@@ -100,7 +96,7 @@ async def run_cli_agent(
     max_turns: int = 50,
     on_text: asyncio.Queue[str] | None = None,
 ) -> CLIRunResult:
-    cli_proc, prompt_file = await start_cli_process(agent, task, working_dir, max_turns=max_turns)
+    cli_proc = await start_cli_process(agent, task, working_dir, max_turns=max_turns)
     result = CLIRunResult(agent_name=agent.name, pid=cli_proc.pid)
     output_parts: list[str] = []
 
@@ -125,8 +121,6 @@ async def run_cli_agent(
     result.exit_code = cli_proc.process.returncode
     result.duration_ms = cli_proc.elapsed_ms
     result.is_error = result.exit_code != 0
-    import shutil
-    shutil.rmtree(prompt_file, ignore_errors=True)
     return result
 
 
