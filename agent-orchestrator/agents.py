@@ -30,12 +30,22 @@ ANTI_SLOP_PREAMBLE = (
 )
 
 
+CONTEXT_INSTRUCTIONS = (
+    "You have access to workspace context files. Before making assumptions about "
+    "the user, their location, preferences, or projects, read the relevant files:\n"
+    "- USER.md — who you're helping (name, location, timezone, preferences)\n"
+    "- MEMORY.md — long-term memory (projects, infrastructure, contacts, lessons)\n"
+    "- TOOLS.md — environment-specific notes (SSH hosts, API keys, device names)\n"
+    "Use the Read tool to check these when context would improve your response."
+)
+
+
 def _load_prompt(agents_dir: Path, filename: str) -> str:
     prompt_path = agents_dir / filename
     if not prompt_path.exists():
         raise FileNotFoundError(f"Agent prompt not found: {prompt_path}")
     raw = prompt_path.read_text()
-    return f"{ANTI_SLOP_PREAMBLE}\n\n{raw}"
+    return f"{ANTI_SLOP_PREAMBLE}\n\n{CONTEXT_INSTRUCTIONS}\n\n{raw}"
 
 
 def _read_only_tools() -> list[str]:
@@ -87,25 +97,28 @@ def build_registry(agents_dir: Path) -> dict[str, AgentDefinition]:
             name="security",
             description="Vulnerability scanning, secrets detection, input validation audit",
             system_prompt=_load_prompt(agents_dir, "security.md"),
-            mode_preference=ExecutionMode.SDK,
-            sdk_tools=_read_only_tools(),
+            mode_preference=ExecutionMode.CLI,
+            sdk_tools=_write_tools(),
         ),
         "code-review": AgentDefinition(
             name="code-review",
-            description="Diff review against CLAUDE.md guidelines",
+            description="PR review, diff review against CLAUDE.md guidelines",
             system_prompt=_load_prompt(agents_dir, "review.md"),
-            mode_preference=ExecutionMode.SDK,
-            sdk_tools=_read_only_tools(),
+            mode_preference=ExecutionMode.CLI,
+            sdk_tools=_write_tools(),
         ),
         "infrastructure": AgentDefinition(
             name="infrastructure",
-            description="AWS infrastructure management, Lambda/ECR/IAM",
+            description="General infrastructure management, cloud resources, deployment",
             system_prompt=_load_prompt(agents_dir, "infrastructure.md"),
             mode_preference=ExecutionMode.CLI,
             sdk_tools=_write_tools(),
-            hooks={
-                "pre_execute": ["git stash --include-untracked"],
-                "post_execute": ["git stash pop || true"],
-            },
+        ),
+        "pm": AgentDefinition(
+            name="pm",
+            description="System design, architecture, project planning, GitHub Actions, task breakdown",
+            system_prompt=_load_prompt(agents_dir, "pm.md"),
+            mode_preference=ExecutionMode.CLI,
+            sdk_tools=_write_tools(),
         ),
     }
