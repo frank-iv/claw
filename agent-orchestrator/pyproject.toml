@@ -1,0 +1,15 @@
+[project]
+name = "agent-orchestrator"
+version = "0.1.0"
+description = "Orchestrator for Claude Agent SDK and Claude Code CLI agents"
+requires-python = ">=3.11"
+dependencies = [
+    "claude-agent-sdk>=0.1.0",
+]
+
+[project.scripts]
+dispatch = "dispatcher:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
