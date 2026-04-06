@@ -35,8 +35,8 @@ class TaskHandle:
         return self.status in (TaskStatus.PENDING, TaskStatus.RUNNING)
 
 
-ANALYSIS_AGENTS = frozenset({"research", "security", "code-review"})
-WRITE_AGENTS = frozenset({"linting", "testing", "infrastructure"})
+ANALYSIS_AGENTS = frozenset({"research"})
+WRITE_AGENTS = frozenset({"code-review", "security", "linting", "testing", "infrastructure", "pm"})
 
 
 def resolve_execution_mode(agent: AgentDefinition) -> ExecutionMode:
@@ -209,6 +209,7 @@ class Orchestrator:
             "testing": ["test", "pytest", "coverage", "spec", "unit test", "integration test"],
             "linting": ["lint", "format", "clean", "unused", "dead code", "style"],
             "infrastructure": ["deploy", "infra", "lambda", "ecr", "iam", "aws", "docker"],
+            "pm": ["design", "architect", "plan", "breakdown", "github actions", "ci/cd", "workflow", "project", "spec", "rfc", "proposal"],
         }
         for agent_name, keywords in keyword_map.items():
             if any(kw in lower for kw in keywords):
