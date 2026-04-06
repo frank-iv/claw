@@ -115,7 +115,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-turns",
         type=int,
-        default=50,
+        default=100,
     )
 
     sub = parser.add_subparsers(dest="command", required=True)
